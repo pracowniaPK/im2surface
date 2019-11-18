@@ -2,61 +2,97 @@ import numpy as np
 import matplotlib.pyplot as plt
 from noise import pnoise2
 
-from formulas import e1_f
+from formulas import e1_f, de4_f
 
 
-n = 50
-u0 = np.zeros([n, n])
-e1 = np.zeros([n-2, n-2])
-e2 = np.zeros([n-2, n-2])
-e3 = np.zeros([n-2, n-2])
-p = [[1, 1, 1], [0, 1, 1], [-1, 1, 1]]
+def generate_surface(n, type='perlin', perlin_scale=2):
+    """generate surfaces to work on
 
+    n - size of output matrix
+    type - chosen algorithm to generate surface
+    """
+    u = np.zeros([n, n])
+    if type is 'perlin':
+        for i in range(n):
+            for j in range(n):
+                u[i, j] = pnoise2(perlin_scale*i/n, perlin_scale*j/n)
+    if type is 'central':
+        for i in range(n):
+            for j in range(n):
+                u[i, j] = ((n/2 - i)/(n/2))**2 + ((n/2 - j)/(n/2))**2
 
-# generowanie losowej powierzchni
-for i in range(n):
-    for j in range(n):
-        # print([i, j])
-        u0[i, j] = pnoise2(i/n, j/n)
+    return u
 
-# liczenie E dla źródeł światła
-for i in range(1, n-1):
-    for j in range(1, n-1):
-        e1[i-1, j-1] = e1_f(u0[i, j-1], u0[i+1, j], u0[i, j+1], u0[i-1, j], p[0][0], p[0][1], p[0][2], 1)
-        e2[i-1, j-1] = e1_f(u0[i, j-1], u0[i+1, j], u0[i, j+1], u0[i-1, j], p[1][0], p[1][1], p[1][2], 1)
-        e3[i-1, j-1] = e1_f(u0[i, j-1], u0[i+1, j], u0[i, j+1], u0[i-1, j], p[2][0], p[2][1], p[2][2], 1)
+def surface2ims(u, vs):
+    """calculates images of given surface
 
-# generowanie e z szumem (na potrzeby liczenia miary błędu)
-d = 0.005
-g1 = e1.copy()
-g1 = g1 + np.random.rand(n-2, n-2)*d - d/2
+    u - surface (heights matrix)
+    vs - light vectors
+    """
+    n = u.shape[0]
+    es = []
+    for v in vs:
+        es.append(np.zeros([n-2, n-2]))
+        for i in range(n-2):
+            for j in range(n-2):
+                es[-1][i, j] = e1_f(u[i+1, j], u[i+2, j+1], u[i+1, j+2], u[i, j+1], v[0], v[1], v[2], 2/n)
+    
+    return es
 
-# # liczenie błędu
-norm = false
-score = 0
-for i in range(n):
-    for j in range(n):
-        pass
+def score(guess, es, vs, per_pixel=False):
+    """calculates cost function of given surface
 
+    guess - surface to measure
+    es - images of original surface
+    vs - light vector used to iluminate original surface
+    per_pixel - if True, cost value is divided by number comparision points
+    """
+    costs = []
+    for e, v in zip(es, vs):
+        e_guess = surface2ims(guess, [v])[0]
+        costs.append((e_guess - e)**2)
+    if per_pixel:
+        per_pixel_cost = 0
+        n = 0
+        for c in costs:
+            n += 1
+            per_pixel_cost += np.average(c)
+        costs = per_pixel_cost/n
+    return costs
 
-# print(u0)
-plt.subplot(221)
-im = plt.imshow(u0)
-plt.colorbar(im)
+def gradient(guess, es, vs):
+    """calculates gradient of cost function
 
-plt.subplot(222)
-im = plt.imshow(e1)
-plt.colorbar(im)
+    guess - work surface
+    es - images of original surface
+    vs - light vector used to iluminate original surface
+    """
+    n = guess.shape[0]
+    des = []
+    for e, v in zip(es, vs):
+        des.append(np.zeros([n-6, n-6]))
+        for i in range(n-6):
+            for j in range(n-6):
+                des[-1][i, j] = de4_f(
+                    guess[i+3, j+3],
+                    guess[i+3, j+1], guess[i+4, j+2], guess[i+5, j+3], guess[i+4, j+4], 
+                    guess[i+3, j+5], guess[i+2, j+4], guess[i+1, j+3], guess[i+2, j+2], 
+                    e[i+2, j+1], e[i+3, j+2], e[i+2, j+3], e[i+1, j+2], 
+                    v[0], v[1], v[2], 2/n
+                )
+    return des
 
-plt.subplot(223)
-im = plt.imshow(g1)
-plt.colorbar(im)
+def apply_gradient(guess, grd, k):
+    """applies gradient to the guess as optimizatoin step
 
-plt.subplot(224)
-im = plt.imshow(e1 - g1)
-plt.colorbar(im)
-
-plt.show()
-
-
-
+    guess - surface to apply gradient to
+    grd - gradient
+    k - step size coefficient
+    """
+    n = guess.shape[0]
+    guess_new = guess.copy()
+    for i in range(n-6):
+        for j in range(n-6):
+            guess_new[i+3, j+3] = guess[i+3, j+3] - k*grd[i, j]
+            # print(u_new[i+3, j+3], u[i+3, j+3], k*grd[i, j])
+    return guess_new
