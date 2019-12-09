@@ -23,64 +23,53 @@ def generate_surface(n, type='perlin', perlin_scale=2):
 
     return u
 
-def surface2ims(u, vs):
+def surface2im(u, v):
     """calculates images of given surface
 
     u - surface (heights matrix)
-    vs - light vectors
+    v - light vector
     """
     n = u.shape[0]
-    es = []
-    for v in vs:
-        es.append(np.zeros([n-2, n-2]))
-        for i in range(n-2):
-            for j in range(n-2):
-                es[-1][i, j] = e1_f(u[i+1, j], u[i+2, j+1], u[i+1, j+2], u[i, j+1], v[0], v[1], v[2], 2/n)
+    e = np.zeros([n-2, n-2])
+    for i in range(n-2):
+        for j in range(n-2):
+            e[i, j] = e1_f(u[i+1, j], u[i+2, j+1], u[i+1, j+2], u[i, j+1], v[0], v[1], v[2], 2/n)
     
-    return es
+    return e
 
-def score(guess, es, vs, per_pixel=False):
+def score(guess, e, v, per_pixel=False):
     """calculates cost function of given surface
 
     guess - surface to measure
-    es - images of original surface
-    vs - light vector used to iluminate original surface
+    e - image of original surface
+    v - light vector used to iluminate original surface
     per_pixel - if True, cost value is divided by number comparision points
     """
-    costs = []
-    for e, v in zip(es, vs):
-        e_guess = surface2ims(guess, [v])[0]
-        costs.append((e_guess - e)**2)
+    e_guess = surface2im(guess, v)
+    cost = (e_guess - e)**2
     if per_pixel:
-        per_pixel_cost = 0
-        n = 0
-        for c in costs:
-            n += 1
-            per_pixel_cost += np.average(c)
-        costs = per_pixel_cost/n
-    return costs
+        cost = np.average(cost)
+    return cost
 
-def gradient(guess, es, vs):
+def gradient(guess, e, v):
     """calculates gradient of cost function
 
     guess - work surface
-    es - images of original surface
-    vs - light vector used to iluminate original surface
+    e - image of original surface
+    v - light vector used to iluminate original surface
     """
     n = guess.shape[0]
-    des = []
-    for e, v in zip(es, vs):
-        des.append(np.zeros([n-6, n-6]))
-        for i in range(n-6):
-            for j in range(n-6):
-                des[-1][i, j] = de4_f(
-                    guess[i+3, j+3],
-                    guess[i+3, j+1], guess[i+4, j+2], guess[i+5, j+3], guess[i+4, j+4], 
-                    guess[i+3, j+5], guess[i+2, j+4], guess[i+1, j+3], guess[i+2, j+2], 
-                    e[i+2, j+1], e[i+3, j+2], e[i+2, j+3], e[i+1, j+2], 
-                    v[0], v[1], v[2], 2/n
-                )
-    return des
+    de = np.zeros([n-6, n-6])
+    for i in range(n-6):
+        for j in range(n-6):
+            de[i, j] = de4_f(
+                guess[i+3, j+3],
+                guess[i+3, j+1], guess[i+4, j+2], guess[i+5, j+3], guess[i+4, j+4], 
+                guess[i+3, j+5], guess[i+2, j+4], guess[i+1, j+3], guess[i+2, j+2], 
+                e[i+2, j+1], e[i+3, j+2], e[i+2, j+3], e[i+1, j+2], 
+                v[0], v[1], v[2], 2/n
+            )
+    return de
 
 def apply_gradient(guess, grd, k):
     """applies gradient to the guess as optimizatoin step
@@ -94,5 +83,30 @@ def apply_gradient(guess, grd, k):
     for i in range(n-6):
         for j in range(n-6):
             guess_new[i+3, j+3] = guess[i+3, j+3] - k*grd[i, j]
-            # print(u_new[i+3, j+3], u[i+3, j+3], k*grd[i, j])
+    return guess_new
+
+def interpolate_border(guess):
+    """interpolates 3px border of surface
+
+    guess - surface with border to smooth
+    """
+    n = guess.shape[0]
+    guess_new = guess.copy()
+    for i in range(n):
+        d1 = guess_new[i, 3] - guess_new[i, 4]
+        guess_new[i, 2] = guess_new[i, 3] + d1
+        guess_new[i, 1] = guess_new[i, 2] + d1
+        guess_new[i, 0] = guess_new[i, 1] + d1
+        d2 = guess_new[i, n-4] - guess_new[i, n-5]
+        guess_new[i, n-3] = guess_new[i, n-4] + d2
+        guess_new[i, n-2] = guess_new[i, n-3] + d2
+        guess_new[i, n-1] = guess_new[i, n-2] + d2
+        d3 = guess_new[3, i] - guess_new[4, i]
+        guess_new[2, i] = guess_new[3, i] + d3
+        guess_new[1, i] = guess_new[2, i] + d3
+        guess_new[0, i] = guess_new[1, i] + d3
+        d4 = guess_new[n-4, i] - guess_new[n-5, i]
+        guess_new[n-3, i] = guess_new[n-4, i] + d4
+        guess_new[n-2, i] = guess_new[n-3, i] + d4
+        guess_new[n-1, i] = guess_new[n-2, i] + d4
     return guess_new
