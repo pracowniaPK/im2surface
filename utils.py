@@ -4,11 +4,11 @@ from sympy import latex
 
 pl = lambda s: print(latex(s))
 
-def get_name(im_number, n, steps, noise, interpolation_on=False):
+def get_name(im_number, n, steps, gamma, noise, interpolation_on=False):
     """returns name of output file based on chosen options"""
     noise = str(noise).replace('.', 'o')
     name = 'im'
-    name += '{}_n{}_s{}_{}'.format(im_number, n, steps, noise)
+    name += '{}_n{}_s{}_{}_{}'.format(im_number, n, steps, gamma, noise)
     if interpolation_on:
         name += '_i'
     name += '.gif'

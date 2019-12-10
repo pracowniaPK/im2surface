@@ -1,8 +1,13 @@
+import csv
+import time
+
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 from noise import pnoise2
 
 from formulas import e1_f, de4_f
+from utils import get_name
 
 
 def generate_surface(n, type='perlin', perlin_scale=2):
@@ -110,3 +115,101 @@ def interpolate_border(guess):
         guess_new[n-2, i] = guess_new[n-3, i] + d4
         guess_new[n-1, i] = guess_new[n-2, i] + d4
     return guess_new
+
+# n = 128
+# steps = 500
+# do_border_interpolation = False
+# imgs_noise = 0.05
+# grad_coef = 0.0005
+# log_filename = 'grad.log'
+# surface_type = 'perlin'
+# gif_batch_name = 6
+# gif_steps = 5
+def basic_grad_loop(n, steps, imgs_noise, grad_coef, 
+    do_border_interpolation=False,
+    surface_type='central', do_log=True, log_filename='grad.log', 
+    do_gif=True, gif_batch_name='', gif_steps=1):
+
+    start_time = time.time()
+
+    vs = [[-1, 2, -2], [-1, -1, -2], [0, 0, -2]]
+    u = generate_surface(n, type=surface_type, perlin_scale=1.2)
+    es = []
+    for v in vs:
+        es.append(surface2im(u, v) 
+            + (imgs_noise * np.random.rand(n-2,n-2) - (imgs_noise / 2)))
+    guess_l = [np.ones([n, n])/2]
+    s_l = [0]
+    for e, v in zip(es, vs):
+        s_l[-1] += score(guess_l[-1], e, v, per_pixel=True)
+
+    grad_work = 0
+    for i in range(steps-1):
+        if 0 == i % np.floor(steps/10):
+            print(i, s_l[-1])
+        guess_work = guess_l[-1].copy()
+        score_work = 0
+        for e, v in zip(es, vs):
+            grad_work = gradient(guess_work, e, v)
+            guess_work = apply_gradient(guess_work, grad_work, grad_coef)
+            if do_border_interpolation:
+                guess_work = interpolate_border(guess_work)
+            score_work += score(guess_work, e, v, per_pixel=True)
+        guess_l.append(guess_work)
+        s_l.append(score_work)
+
+    d_time = time.time() - start_time
+    print('time: {} s'.format(d_time))
+
+
+    # logging
+    if do_log:
+        with open(log_filename, 'a+', newline='') as f:
+            cw = csv.writer(f)
+            cw.writerow([
+                steps,
+                n,
+                d_time,
+                s_l[0],
+                np.min(s_l),
+                s_l[-1],
+                surface_type,
+                grad_coef,
+                imgs_noise,
+                0,
+            ])
+
+
+    # plotting
+    if do_gif:
+        out_name = get_name(gif_batch_name, n, steps, grad_coef, imgs_noise, do_border_interpolation)
+
+        fig = plt.figure()
+        ax1 = fig.add_subplot(121)
+        ax2 = fig.add_subplot(122)
+        fig.set_tight_layout(True)
+
+        ax1.set_xlabel('γ:{}\nmin:{}'.format(grad_coef, np.min(s_l)))
+        im = ax1.imshow(guess_l[-1])
+        cbar = ax1.figure.colorbar(im, ax=ax2)
+        line, = ax2.plot(np.arange(steps), s_l, '-') 
+        dot, = ax2.plot([0], [s_l[0]], 'o')
+
+        def update(i):
+            i = i * gif_steps
+            label = 'step {0}'.format(i)
+            if 0 == i % np.floor(steps/10):
+                print(label)
+            
+            im.set_data(guess_l[i])
+            ax1.set_title(label)
+            dot.set_xdata([i])
+            dot.set_ydata([s_l[i]])
+            # fig.suptitle(label)
+            # return im, ax
+
+        anim = FuncAnimation(fig, update, 
+            frames=np.arange(0, int(len(guess_l)/gif_steps)), interval=200)
+        anim.save('plots/'+out_name, dpi=80, writer='imagemagick')
+
+        print('out: ' + out_name)
