@@ -1,4 +1,5 @@
-from multiprocessing import Process
+from multiprocessing import Pool, Process
+from itertools import product
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -10,15 +11,51 @@ from structure import (apply_gradient, basic_grad_loop, generate_surface,
 from utils import get_name
 
 
-def f(s, g):
-    basic_grad_loop(64, s, 0, g, gif_batch_name='_tst', 
-        do_border_interpolation=False, surface_type='perlin')
+def f(u_n, i_n):
+    basic_grad_loop(
+        64, 500, 0.0005,
+        surface_type='central',
+        guess_type='u',
+        imgs_noise=i_n,
+        u_noise=u_n,
+        gif_batch_name='noise',
+        gif_steps=5,
+        log_filename='noise_img.log',
+    )
     
 if __name__ == "__main__":
 
-    for i in range(1):
-        p = Process(target=f, args=(50, 0.001*(i+1)))
-        p.start()
+    pool = Pool(3)
+
+    pool.starmap(f, product([i*0.02 for i in [2, 10]], [0.01, 0.05, 0.1, 0.2]))
+
+
+    # ps = []
+
+    # for i in range(1,10):
+    #     ps.append(
+    #         Process(target=basic_grad_loop,
+    #         args=(64, 200, 0.0003),
+    #         kwargs={
+    #             'guess_type':'u',
+    #             'u_noise':0.02*i,
+    #             'gif_batch_name':'tmp',
+    #             'log_filename':'tmp.log',
+    #         }
+    #         )
+    #     )
+
+
+    # for p in ps:
+    #     p.start()
+
+    # for p in ps:
+    #     p.join()
+
+
+    # for i in range(1):
+    #     p = Process(target=f, args=(10, 0.001*(i+1)))
+    #     p.start()
 
 
 # t = np.arange(len(s_l))
