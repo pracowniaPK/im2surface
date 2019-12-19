@@ -197,7 +197,7 @@ def basic_grad_loop(n, steps, grad_coef, imgs_noise=0,
                 steps,
                 grad_coef,
                 u_noise,
-                imgs_noise,
+                imgs_noise, # new
                 s_l[0],
                 np.min(s_l),
                 s_l[-1],
@@ -210,15 +210,25 @@ def basic_grad_loop(n, steps, grad_coef, imgs_noise=0,
     if do_gif:
         out_name = get_name(gif_batch_name, n, steps, grad_coef, imgs_noise, u_noise, do_border_interpolation)
 
-        fig = plt.figure(figsize=(20,5))
-        ax1 = fig.add_subplot(142)
-        ax2 = fig.add_subplot(141)
-        ax3 = fig.add_subplot(143)
-        ax4 = fig.add_subplot(144)
+        fig = plt.figure(figsize=(15, 10))
+        ax2 = fig.add_subplot(231) # wykres kosztu
+        ax1 = fig.add_subplot(232) # work surface
+        ax1d = fig.add_subplot(2, 3, 3, projection='3d') # work surface
+        ax3 = fig.add_subplot(235) # różnica u
+        ax3d = fig.add_subplot(2, 3, 6, projection='3d')
+        ax4 = fig.add_subplot(234) # img
         fig.set_tight_layout(True)
 
         ax1.set_xlabel('γ:{}\nmin:{}'.format(grad_coef, np.min(s_l)))
-        im = ax1.imshow(guess_l[-1])
+        im = ax1.imshow(guess_l[0])
+        X, Y = np.mgrid[0:n, 0:n]
+        # cm2 = plt.cm.get_cmap('plasma')
+        cm2 = plt.cm.get_cmap('viridis')
+        # surface = ax1d.plot_surface(X, Y, guess_l[-1], cmap=cm2)
+        plot = [ax1d.plot_surface(X, Y, guess_l[-1], cmap=cm2)]
+        min1 = np.min(guess_l[-1])
+        max1 = np.max(guess_l[-1])
+        ax1d.plot([0, 0], [0, 0], [min1, max1], 'w')
         cbar = ax1.figure.colorbar(im, ax=ax2)
         line, = ax2.plot(np.arange(steps), s_l, '-') 
         scores = np.array(scores).T
@@ -227,9 +237,15 @@ def basic_grad_loop(n, steps, grad_coef, imgs_noise=0,
         dot, = ax2.plot([0], [s_l[0]], 'o')
         cm = plt.cm.get_cmap('Reds')
         d = np.average(u) - np.average(guess_l[0])
-        im3 = ax3.imshow(np.absolute(guess_l[0] - u + d), cmap=cm)
-        cm = plt.cm.get_cmap('gray')
-        im4 = ax4.imshow(ims[-1], cmap=cm)
+        delta = np.absolute(guess_l[0] - u + d)
+        im3 = ax3.imshow(delta, cmap=cm)
+        plot2 = [ax3d.plot_surface(X, Y, delta, cmap=cm)]
+        min2 = np.min(delta)
+        max2 = np.max(delta)
+        ax3d.plot([0, 0], [0, 0], [min2, max2], 'w')
+
+        cm3 = plt.cm.get_cmap('gray')
+        im4 = ax4.imshow(ims[-1], cmap=cm3)
 
         def update(i):
             i = i * gif_steps
@@ -238,14 +254,19 @@ def basic_grad_loop(n, steps, grad_coef, imgs_noise=0,
                 print(label)
             
             im.set_data(guess_l[i])
+            plot[0].remove()
+            plot[0] = ax1d.plot_surface(X, Y, guess_l[i], cmap=cm2)
+            # surface = ax1d.plot_surface(X, Y, guess_l[i], cmap=cm2)
             d = np.average(u) - np.average(guess_l[0])
             im3.set_data(np.absolute(guess_l[i] - u + d))
+            plot2[0].remove()
+            plot2[0] = ax3d.plot_surface(X, Y, np.absolute(guess_l[i] - u + d), cmap=cm)
             im4.set_data(ims[i])
-            ax1.set_title(label)
+            # ax1.set_title(label)
             ax2.set_xlabel('score: {}'.format(s_l[i]))
             dot.set_xdata([i])
             dot.set_ydata([s_l[i]])
-            # fig.suptitle(label)
+            fig.suptitle(label)
             # return im, ax
 
         anim = FuncAnimation(fig, update, 
